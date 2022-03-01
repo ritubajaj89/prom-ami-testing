@@ -1,0 +1,115 @@
+version: '3.6'
+
+volumes:
+    prometheus_data: {}
+    grafana_data: {}
+
+services:
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.16.0
+    volumes:
+      - ./prometheus/:/etc/prometheus/
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - 9090:9090
+    links:
+      - cadvisor:cadvisor
+      - alertmanager:alertmanager
+    depends_on:
+      - cadvisor
+    restart: always
+    deploy:
+      mode: global
+
+  node-exporter:
+    container_name: node-exporter
+    image: quay.io/prometheus/node-exporter:v0.18.1
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - --collector.filesystem.ignored-mount-points
+      - "^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)"
+    ports:
+      - 9100:9100
+    restart: always
+    deploy:
+      mode: global
+
+  alertmanager:
+    container_name: alertmanager
+    image: quay.io/prometheus/alertmanager:v0.20.0
+    ports:
+      - 9093:9093
+    volumes:
+      - ./alertmanager/:/etc/alertmanager/
+    restart: always
+    command:
+      - '-config.file=/etc/alertmanager/config.yml'
+      - '-storage.path=/alertmanager'
+    deploy:
+      mode: global
+
+  cadvisor:
+    container_name: cadvisor-exporter
+    image: registry.tools.adidas-group.com/pea-techmon-public/cadvisor:v0.34.0
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - 8080:8080
+    restart: always
+    deploy:
+      mode: global
+
+  grafana:
+    image: grafana/grafana:5.4.2
+    depends_on:
+      - prometheus
+    ports:
+      - 3000:3000
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    env_file:
+      - config.monitoring
+
+  blackbox_exporter:
+    container_name: blackbox-exporter
+    image: quay.io/prometheus/blackbox-exporter:v0.16.0
+    ports:
+      - 9115:9115
+    volumes:
+      - ./blackboxexporter/:/etc/blackboxexporter/
+    command:
+      - '--config.file=/etc/blackboxexporter/config.yml'
+    restart: always
+
+  prom2kafka:
+    container_name: prom2kafka
+    image: registry.tools.adidas-group.com/pea-techmon-public/prom2kafka:latest
+    command:
+      - --kafka-brokers=<kafka-brokers-environment>
+      - --kafka-topic=<your-leanix>.metrics
+      - --httpListenAddr=:9201
+      - --ca-file=/etc/prom2kafka/ca.pem
+      - --key-file=/etc/prom2kafka/client.key
+      - --cert-file=/etc/prom2kafka/client.pem
+      - --batch-size=1000  
+    volumes:
+      - ./certs:/etc/prom2kafka
+    ports:
+      - 9201:9201
+    restart: always
