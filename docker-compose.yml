@@ -46,32 +46,40 @@ services:
       mode: global
 
   alertmanager:
-    container_name: alertmanager
     image: prom/alertmanager:v0.23.0
-    ports:
-      - 9093:9093
+    container_name: alertmanager
     volumes:
-      - ./alertmanager/:/etc/alertmanager/
-    restart: always
+      - ./alertmanager:/etc/alertmanager
     command:
-      - '-config.file=/etc/alertmanager/config.yml'
-      - '-storage.path=/alertmanager'
-    deploy:
-      mode: global
+      - '--config.file=/etc/alertmanager/config.yml'
+      - '--storage.path=/alertmanager'
+    restart: unless-stopped
+    expose:
+      - 9093
+    networks:
+      - monitor-net
+    labels:
+      org.label-schema.group: "monitoring"
 
   cadvisor:
-    container_name: cadvisor-exporter
     image: gcr.io/cadvisor/cadvisor:v0.43.0
+    container_name: cadvisor
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
     volumes:
       - /:/rootfs:ro
-      - /var/run:/var/run:rw
+      - /var/run:/var/run:ro
       - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-    ports:
-      - 8080:8080
-    restart: always
-    deploy:
-      mode: global
+      - /var/lib/docker:/var/lib/docker:ro
+      #- /cgroup:/cgroup:ro #doesn't work on MacOS only for Linux
+    restart: unless-stopped
+    expose:
+      - 8080
+    networks:
+      - monitor-net
+    labels:
+      org.label-schema.group: "monitoring"
 
   grafana:
     image: grafana/grafana:8.3.3
@@ -97,19 +105,19 @@ services:
       - '--config.file=/etc/blackboxexporter/config.yml'
     restart: always
 
-  prom2kafka:
-    container_name: prom2kafka
-    image: ritubajaj170889/prom2kafka:latest
-    command:
-      - --kafka-brokers=<kafka-brokers-environment>
-      - --kafka-topic=<your-leanix>.metrics
-      - --httpListenAddr=:9201
-      - --ca-file=/etc/prom2kafka/ca.pem
-      - --key-file=/etc/prom2kafka/client.key
-      - --cert-file=/etc/prom2kafka/client.pem
-      - --batch-size=1000  
-    volumes:
-      - ./certs:/etc/prom2kafka
-    ports:
-      - 9201:9201
-    restart: always
+#  prom2kafka:
+#    container_name: prom2kafka
+#    image: ritubajaj170889/prom2kafka:latest
+#    command:
+#      - --kafka-brokers=<kafka-brokers-environment>
+#      - --kafka-topic=57e99aa6-8f8f-43e1-bd49-b4db282d1cdd.metrics
+#      - --httpListenAddr=:9201
+#      - --ca-file=/etc/prom2kafka/ca.pem
+#      - --key-file=/etc/prom2kafka/client.key
+#      - --cert-file=/etc/prom2kafka/client.pem
+#      - --batch-size=1000  
+#    volumes:
+#      - ./certs:/etc/prom2kafka
+#    ports:
+#      - 9201:9201
+#    restart: always
