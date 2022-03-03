@@ -3,8 +3,9 @@ yum update -y
 
 if ! type "docker" > /dev/null; then
   echo "Installing Docker"
-  yum -y install docker.io
-  yum -y install docker-ce
+  yum -y install docker
+  systemctl start docker
+  systemctl status docker
 fi
 
 # get ips | search inet addr: | split on : get 2nd field | print out
